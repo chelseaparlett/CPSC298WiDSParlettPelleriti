@@ -1,0 +1,193 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+# libraries
+library(tidyverse)
+library(recipes)
+library(scales)
+library(ggcorrplot)
+library(missMethods)
+
+setwd("/Users/cparlett/Desktop/Desktop/School/CPSC298WiDSParlettPelleriti/")
+# Load Data
+df <- read.csv("train.csv")
+head(df)
+```
+
+## Clean Data
+
+```{r}
+# Check number of missing data points
+summary(df)
+```
+```{r}
+# Dummy Variables
+dummies <- df %>% recipe(site_eui ~ .) %>%
+  step_dummy(facility_type, State_Factor,
+             one_hot = TRUE)  %>% 
+  prep() %>% 
+  bake(df)
+
+head(dummies)
+```
+```{r}
+# Remove Duplicates
+
+df = distinct(df)
+```
+
+```{r}
+# Create New Columns
+
+df["december_range_temp"] <- df["december_max_temp"] - df["december_min_temp"]
+df["december_range_temp"]
+```
+
+```{r}
+# Converting Data Types
+df["january_min_temp"] <- as.numeric(df["january_min_temp"])
+
+
+# Converting to DateTime
+# not applicable here but
+# df["X"] <- as.Date(df["X"])
+```
+
+```{r}
+# Scaling/Standardizing
+continuous <- sapply(df, is.numeric)
+
+# z score
+df_scale = df
+df_scale[continuous] = scale(df_scale[continuous])
+
+head(df_scale)
+
+# Min Max Scaling
+normalize <- function(x) {
+    return((x- min(x, na.rm = TRUE)) /(max(x, na.rm = TRUE)-min(x, na.rm = TRUE)))
+}
+
+# z score
+df_scale = df
+df_scale[continuous] = lapply(df_scale[continuous], rescale)
+
+head(df_scale)
+
+
+```
+
+```{r}
+# Create New Columns
+
+# log transform
+df_scale["site_eui"] = log(df_scale["site_eui"])
+
+# sqrt transform
+df_scale["site_eui"] = sqrt(df_scale["site_eui"])
+```
+
+## Data Visualization and Summarization
+```{r}
+# summaries
+summary(df)
+```
+
+```{r}
+# summaries
+df %>% group_by(building_class) %>% count()
+```
+
+```{r}
+# Bar Charts
+
+## ggplot
+(ggplot(df, aes(x = building_class, fill = building_class)) +
+ geom_bar() +
+  theme_minimal() +
+  labs(x = "Building Class",
+  y = "Count",
+  title = "Number of Buildings Per Class") +
+  theme(legend.position = "none"))
+```
+
+```{r}
+# boxplots and violin plots
+
+(ggplot(df[df["year_built"] > 0,], aes(y = year_built, x = building_class,
+fill = building_class)) +
+geom_boxplot() + theme_minimal() +
+labs(x = "Building Class", y = "Year Built",
+title = "Year Built by Building Class") +
+theme(legend.position = "none"))
+
+```
+
+```{r}
+(ggplot(df[df["year_built"] > 0,], aes(y = year_built, x = building_class,
+fill = building_class)) +
+geom_violin() + theme_minimal() +
+labs(x = "Building Class", y = "Year Built",
+title = "Year Built by Building Class") +
+theme(legend.position = "none"))
+
+```
+
+```{r}
+# histograms
+(ggplot(df, aes(x = site_eui)) +
+geom_histogram(fill = "lightblue", color = "black", binwidth = 50) +
+ theme_minimal() +
+labs(x = "Site EUI", y = "Count",
+title = "Site EUI") +
+theme(legend.position = "none"))
+
+```
+
+```{r}
+# scatterplot
+(ggplot(df[df["year_built"] > 0,], aes(x = site_eui, y = year_built)) +
+geom_point(alpha = 0.05) +
+ theme_minimal() +
+labs(x = "Site EUI", y = "Year Built",
+title = "Site EUI by Year Built") +
+theme(legend.position = "none"))
+
+```
+
+```{r}
+ggcorrplot(round(cor(df[endsWith(colnames(df), "max_temp")]),2))
+```
+## Missing Data Handling
+
+```{r}
+# Missing Data Removal
+
+# Complete Cases
+df_complete = na.omit(df)
+```
+
+```{r}
+# only delete rows that are missing values in one of these columns
+df_sub <- na.omit(df[,c("direction_max_wind_speed", "direction_peak_wind_speed")])
+cor(df_sub)
+
+```
+
+```{r}
+# Simple Mean Imputation
+df_imp = df
+df_imp[continuous] = impute_mean(df_imp[continuous])
+
+
+categorical <- sapply(df, is.character)
+
+df_imp[categorical] = impute_mode(df_imp[categorical])
+
+sapply(df, function(x) sum(is.na(x)))
+sapply(df_imp, function(x) sum(is.na(x)))
+
+```
